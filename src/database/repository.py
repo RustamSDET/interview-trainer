@@ -1,7 +1,8 @@
+from datetime import datetime
 from typing import List, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from src.database.models import GlobalTopic, LocalTopic, Question, QuestionType
+from src.database.models import GlobalTopic, LocalTopic, Question, QuestionType, Session as DBSession, AnswerHistory
 
 # --- Global Topic CRUD ---
 
@@ -174,3 +175,53 @@ def mark_question_as_bad(db: Session, question_id: int) -> bool:
     Marks a question as bad (bad_question = True).
     """
     return set_question_bad_status(db, question_id, is_bad=True)
+
+
+# --- Training Session & Answer History CRUD ---
+
+def create_training_session(db: Session, session_mode: str, total_questions: int) -> DBSession:
+    """
+    Creates and records a new training session (e.g. 'Sandbox' or 'Interview').
+    """
+    session_obj = DBSession(
+        session_mode=session_mode,
+        total_questions=total_questions,
+        started_at=datetime.utcnow()
+    )
+    db.add(session_obj)
+    db.flush()
+    return session_obj
+
+def finish_training_session(db: Session, session_id: int) -> bool:
+    """
+    Marks a training session as completed by setting finished_at.
+    """
+    session_obj = db.get(DBSession, session_id)
+    if session_obj:
+        session_obj.finished_at = datetime.utcnow()
+        db.flush()
+        return True
+    return False
+
+def create_answer_history(
+    db: Session,
+    session_id: int,
+    question_id: int,
+    confidence_score: int,
+    transcribed_text: Optional[str] = None,
+    evaluation_status: Optional[str] = None
+) -> AnswerHistory:
+    """
+    Saves an answer record under a given session.
+    """
+    answer_obj = AnswerHistory(
+        session_id=session_id,
+        question_id=question_id,
+        confidence_score=confidence_score,
+        transcribed_text=transcribed_text,
+        evaluation_status=evaluation_status,
+        answered_at=datetime.utcnow()
+    )
+    db.add(answer_obj)
+    db.flush()
+    return answer_obj
