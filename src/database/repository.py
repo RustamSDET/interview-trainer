@@ -157,3 +157,20 @@ def delete_question(db: Session, question_id: int) -> bool:
         db.flush()
         return True
     return False
+
+def set_question_bad_status(db: Session, question_id: int, is_bad: bool = True) -> bool:
+    """
+    Sets the bad_question status of a question.
+    """
+    question = db.get(Question, question_id)
+    if question:
+        question.bad_question = is_bad
+        db.flush()
+        return True
+    return False
+
+def mark_question_as_bad(db: Session, question_id: int) -> bool:
+    """
+    Marks a question as bad (bad_question = True).
+    """
+    return set_question_bad_status(db, question_id, is_bad=True)

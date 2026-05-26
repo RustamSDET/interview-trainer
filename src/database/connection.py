@@ -43,3 +43,14 @@ def init_db():
     """
     from src.database.models import Base
     Base.metadata.create_all(bind=engine)
+    
+    # Safe database column migration for existing databases
+    from sqlalchemy import inspect, text
+    inspector = inspect(engine)
+    if "questions" in inspector.get_table_names():
+        columns = [col['name'] for col in inspector.get_columns('questions')]
+        if 'bad_question' not in columns:
+            print("🔧 Schema Migration: Adding 'bad_question' column to 'questions' table...")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE questions ADD COLUMN bad_question BOOLEAN DEFAULT 0 NOT NULL"))
+            print("✅ Migration completed successfully!")

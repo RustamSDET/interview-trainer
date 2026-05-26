@@ -54,6 +54,7 @@ class Question(Base):
     question_type: Mapped[QuestionType] = mapped_column(Enum(QuestionType), nullable=False)
     keywords: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Comma-separated keywords
     code_snippet: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    bad_question: Mapped[bool] = mapped_column(default=False, nullable=False)
     
     local_topic: Mapped["LocalTopic"] = relationship(back_populates="questions")
     # Cascades deletions to answers

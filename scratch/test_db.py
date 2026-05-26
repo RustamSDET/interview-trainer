@@ -25,6 +25,8 @@ from src.database.repository import (
     get_questions_by_local_topic,
     delete_question,
     get_question_by_id,
+    mark_question_as_bad,
+    set_question_bad_status,
 )
 
 def run_tests():
@@ -85,6 +87,20 @@ def run_tests():
         assert question_id is not None
         assert question.question_type == QuestionType.THEORY
         assert question.local_topic_id == local_topic_id
+        assert question.bad_question is False, "❌ Error: Question bad_question should default to False!"
+        
+        # Test marking question as bad
+        print("Testing marking question as bad...")
+        success = mark_question_as_bad(session, question_id)
+        assert success is True, "❌ Error: Failed to mark question as bad!"
+        assert question.bad_question is True, "❌ Error: bad_question was not updated to True!"
+        
+        # Test restoring question (setting is_bad=False)
+        print("Testing restoring question to good...")
+        success = set_question_bad_status(session, question_id, is_bad=False)
+        assert success is True, "❌ Error: Failed to restore question bad status!"
+        assert question.bad_question is False, "❌ Error: bad_question was not updated to False!"
+        print("✅ bad_question toggle assertions passed successfully.")
         
     # 4. Query and Verify Relationships (In a separate session to ensure persistence)
     with get_db_session() as session:
