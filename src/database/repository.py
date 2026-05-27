@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from src.database.models import GlobalTopic, LocalTopic, Question, QuestionType, Session as DBSession, AnswerHistory
+from src.database.models import GlobalTopic, LocalTopic, Question, QuestionType, QuestionGrade, Session as DBSession, AnswerHistory
 
 # --- Global Topic CRUD ---
 
@@ -113,7 +113,8 @@ def create_question(
     expected_answer: str,
     question_type: QuestionType,
     keywords: Optional[str] = None,
-    code_snippet: Optional[str] = None
+    code_snippet: Optional[str] = None,
+    grade: QuestionGrade = QuestionGrade.MIDDLE
 ) -> Question:
     """
     Creates a new Question inside a specific LocalTopic.
@@ -128,7 +129,8 @@ def create_question(
         expected_answer=expected_answer,
         question_type=question_type,
         keywords=keywords,
-        code_snippet=code_snippet
+        code_snippet=code_snippet,
+        grade=grade
     )
     db.add(question)
     db.flush()

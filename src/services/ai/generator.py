@@ -7,7 +7,7 @@ from langgraph.graph import StateGraph, START, END
 
 from src.services.ai.base import get_vertex_llm
 from src.services.ai.prompts import SYSTEM_PROMPT, USER_PROMPT, TYPE_REQUIREMENTS
-from src.database.models import GlobalTopic, LocalTopic, Question, QuestionType
+from src.database.models import GlobalTopic, LocalTopic, Question, QuestionType, QuestionGrade
 from src.database.repository import create_question
 
 
@@ -31,13 +31,17 @@ class GeneratedQuestion(BaseModel):
         ...,
         description="Опциональный кусок кода (обязателен для BugHunting с багом и для Algorithms с шаблоном). Если код не требуется, пустая строка."
     )
+    grade: str = Field(
+        ...,
+        description="Уровень сложности вопроса. Должен быть строго один из: junior, middle, senior."
+    )
 
 
 class GeneratedQuestions(BaseModel):
     """Схема списка сгенерированных вопросов"""
     questions: List[GeneratedQuestion] = Field(
         ...,
-        description="Список из ровно 5 уникальных высококачественных вопросов."
+        description="Список из ровно 6 уникальных высококачественных вопросов (3 уровня junior, 2 уровня middle, 1 уровня senior)."
     )
 
 
@@ -163,7 +167,7 @@ def generate_questions_for_topic_and_type(
     overwrite: bool = True
 ) -> int:
     """
-    Генерирует ровно 5 вопросов конкретного типа для указанной подтемы с помощью LangGraph.
+    Генерирует ровно 6 вопросов конкретного типа для указанной подтемы с помощью LangGraph.
     При `overwrite=True` удаляет старые вопросы этого типа по этой теме перед сохранением.
     
     Args:
@@ -232,6 +236,12 @@ def generate_questions_for_topic_and_type(
             if not q_text:
                 continue
                 
+            # Safely map grade to QuestionGrade enum
+            try:
+                grade_enum = QuestionGrade(q.grade.lower().strip())
+            except Exception:
+                grade_enum = QuestionGrade.MIDDLE
+                
             create_question(
                 db=db,
                 local_topic_id=local_topic_id,
@@ -239,7 +249,8 @@ def generate_questions_for_topic_and_type(
                 expected_answer=q_ans,
                 question_type=question_type,
                 keywords=q_key,
-                code_snippet=q_code
+                code_snippet=q_code,
+                grade=grade_enum
             )
             created_count += 1
         
@@ -335,6 +346,12 @@ def generate_questions_batch(
                 if not q_text:
                     continue
 
+                # Safely map grade to QuestionGrade enum
+                try:
+                    grade_enum = QuestionGrade(q.grade.lower().strip())
+                except Exception:
+                    grade_enum = QuestionGrade.MIDDLE
+
                 create_question(
                     db=db,
                     local_topic_id=local_topic_id,
@@ -342,7 +359,8 @@ def generate_questions_batch(
                     expected_answer=q_ans,
                     question_type=qtype,
                     keywords=q_key,
-                    code_snippet=q_code
+                    code_snippet=q_code,
+                    grade=grade_enum
                 )
                 created_count += 1
 
@@ -390,7 +408,7 @@ def generate_all_questions(db: Session, overwrite: bool = True) -> Dict[int, Dic
     """
     Базовый режим работы для UI / Админ-панели:
     Полная генерация банка вопросов. Проходит по ВСЕМ глобальным и локальным темам в БД
-    и генерирует по 5 вопросов под каждый разрешенный тип.
+    и генерирует по 6 вопросов под каждый разрешенный тип.
     
     Returns:
         Dict[int, Dict]: Отчет о результатах генерации по каждому local_topic_id.

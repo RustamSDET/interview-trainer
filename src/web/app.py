@@ -7,7 +7,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.database.connection import get_db_session
+from src.database.connection import get_db_session, init_db
+
+# Initialize database and run migrations on startup
+init_db()
 from src.database.repository import (
     get_all_global_topics,
     get_local_topics_by_global,
@@ -87,6 +90,21 @@ st.markdown("""
         background-color: rgba(244, 63, 94, 0.15) !important;
         color: #fb7185 !important;
         border-color: rgba(244, 63, 94, 0.3) !important;
+    }
+    .badge-junior {
+        background-color: rgba(34, 197, 94, 0.12) !important;
+        color: #4ade80 !important;
+        border-color: rgba(34, 197, 94, 0.25) !important;
+    }
+    .badge-middle {
+        background-color: rgba(245, 158, 11, 0.12) !important;
+        color: #fbbf24 !important;
+        border-color: rgba(245, 158, 11, 0.25) !important;
+    }
+    .badge-senior {
+        background-color: rgba(168, 85, 247, 0.12) !important;
+        color: #c084fc !important;
+        border-color: rgba(168, 85, 247, 0.25) !important;
     }
     
     /* Custom Capsule Tag for keywords */
@@ -185,7 +203,8 @@ def load_hierarchy_data():
                         "question_type": q.question_type,
                         "keywords": q.keywords,
                         "code_snippet": q.code_snippet,
-                        "bad_question": q.bad_question
+                        "bad_question": q.bad_question,
+                        "grade": q.grade
                     })
                 gt_data["local_topics"].append(lt_data)
             hierarchy.append(gt_data)

@@ -72,17 +72,22 @@ def render_db_browser(hierarchy: list):
                                     elif qtype in ["TestArch", "TestDesign"]:
                                         badge_class = "badge-theory" # Neutral indigo
                                         
+                                    # Resolve difficulty grade
+                                    grade_val = q.get("grade")
+                                    grade_str = grade_val.value if hasattr(grade_val, "value") else str(grade_val or "middle")
+                                    grade_class = f"badge-{grade_str.lower()}"
+
                                     if q["bad_question"]:
                                         # Styled card with red/coral border for flagged questions
                                         st.markdown(f"<div class='question-card' style='border: 1px solid rgba(244, 63, 94, 0.4); background: rgba(244, 63, 94, 0.02);'>", unsafe_allow_html=True)
                                         st.markdown(
-                                            f"<h5>Вопрос #{q['id']} <span class='qtype-badge {badge_class}'>{q['question_type'].value}</span> <span class='qtype-badge' style='background-color: rgba(244, 63, 94, 0.2) !important; color: #fb7185 !important; border-color: rgba(244, 63, 94, 0.4) !important;'>⚠️ ЗАБРАКОВАН</span></h5>", 
+                                            f"<h5>Вопрос #{q['id']} <span class='qtype-badge {badge_class}'>{q['question_type'].value}</span> <span class='qtype-badge {grade_class}'>{grade_str.upper()}</span> <span class='qtype-badge' style='background-color: rgba(244, 63, 94, 0.2) !important; color: #fb7185 !important; border-color: rgba(244, 63, 94, 0.4) !important;'>⚠️ ЗАБРАКОВАН</span></h5>", 
                                             unsafe_allow_html=True
                                         )
                                     else:
                                         st.markdown(f"<div class='question-card'>", unsafe_allow_html=True)
                                         st.markdown(
-                                            f"<h5>Вопрос #{q['id']} <span class='qtype-badge {badge_class}'>{q['question_type'].value}</span></h5>", 
+                                            f"<h5>Вопрос #{q['id']} <span class='qtype-badge {badge_class}'>{q['question_type'].value}</span> <span class='qtype-badge {grade_class}'>{grade_str.upper()}</span></h5>", 
                                             unsafe_allow_html=True
                                         )
                                     
@@ -104,7 +109,8 @@ def render_db_browser(hierarchy: list):
                                         
                                     # Expected Answer (Collapsible spoiler)
                                     with st.expander("👁️ Показать ожидаемый ответ / разбор решения"):
-                                        st.markdown(f"<div class='answer-box'><strong>Эталонный ответ:</strong><br><br>{q['expected_answer'].replace('\n', '<br>')}</div>", unsafe_allow_html=True)
+                                        html_answer = q['expected_answer'].replace('\n', '<br>')
+                                        st.markdown(f"<div class='answer-box'><strong>Эталонный ответ:</strong><br><br>{html_answer}</div>", unsafe_allow_html=True)
                                         
                                     # Deletion button and confirmation logic
                                     confirm_key = f"confirm_del_{q['id']}"

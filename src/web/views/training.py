@@ -72,7 +72,8 @@ def render_training():
                             "expected_answer": q.expected_answer,
                             "question_type": q.question_type.value,
                             "keywords": q.keywords,
-                            "code_snippet": q.code_snippet
+                            "code_snippet": q.code_snippet,
+                            "grade": q.grade.value if hasattr(q.grade, "value") else str(q.grade)
                         }
                         for q in random_qs
                     ]
@@ -107,10 +108,13 @@ def render_training():
             badge_class = "badge-bughunting"
         elif q["question_type"] in ["TestArch", "TestDesign"]:
             badge_class = "badge-theory"
+            
+        grade_str = q.get("grade", "middle")
+        grade_class = f"badge-{grade_str.lower()}"
 
         st.markdown(f"<div class='question-card'>", unsafe_allow_html=True)
         st.markdown(
-            f"<h4>Вопрос #{q['id']} <span class='qtype-badge {badge_class}'>{q['question_type']}</span></h4>", 
+            f"<h4>Вопрос #{q['id']} <span class='qtype-badge {badge_class}'>{q['question_type']}</span> <span class='qtype-badge {grade_class}'>{grade_str.upper()}</span></h4>", 
             unsafe_allow_html=True
         )
         st.markdown(f"<div style='font-size: 1.15rem; font-weight: 500; line-height: 1.6; color: #f0f2f6; margin-bottom: 20px;'>{q['question_text']}</div>", unsafe_allow_html=True)
@@ -151,7 +155,8 @@ def render_training():
         if st.session_state.sandbox_show_expected:
             st.markdown("---")
             st.markdown("### 🎯 Эталонный разбор")
-            st.markdown(f"<div class='answer-box' style='background: rgba(99, 102, 241, 0.05); border-left: 4px solid #6366f1; padding: 18px; border-radius: 4px 8px 8px 4px; color: #e2e8f0; font-size: 1rem; line-height: 1.6;'>{q['expected_answer'].replace('\n', '<br>')}</div>", unsafe_allow_html=True)
+            html_answer = q['expected_answer'].replace('\n', '<br>')
+            st.markdown(f"<div class='answer-box' style='background: rgba(99, 102, 241, 0.05); border-left: 4px solid #6366f1; padding: 18px; border-radius: 4px 8px 8px 4px; color: #e2e8f0; font-size: 1rem; line-height: 1.6;'>{html_answer}</div>", unsafe_allow_html=True)
             
             if q["keywords"]:
                 st.markdown("**Ключевые слова для самопроверки:**")

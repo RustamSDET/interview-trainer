@@ -15,6 +15,11 @@ class QuestionType(enum.Enum):
     TEST_DESIGN = "TestDesign"
     BEHAVIORAL = "Behavioral"
 
+class QuestionGrade(enum.Enum):
+    JUNIOR = "junior"
+    MIDDLE = "middle"
+    SENIOR = "senior"
+
 class GlobalTopic(Base):
     __tablename__ = "global_topics"
     
@@ -55,6 +60,7 @@ class Question(Base):
     keywords: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Comma-separated keywords
     code_snippet: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     bad_question: Mapped[bool] = mapped_column(default=False, nullable=False)
+    grade: Mapped[QuestionGrade] = mapped_column(Enum(QuestionGrade), nullable=False, default=QuestionGrade.MIDDLE)
     
     local_topic: Mapped["LocalTopic"] = relationship(back_populates="questions")
     # Cascades deletions to answers

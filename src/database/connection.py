@@ -54,3 +54,9 @@ def init_db():
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE questions ADD COLUMN bad_question BOOLEAN DEFAULT 0 NOT NULL"))
             print("✅ Migration completed successfully!")
+            
+        if 'grade' not in columns:
+            print("🔧 Schema Migration: Adding 'grade' column to 'questions' table...")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE questions ADD COLUMN grade VARCHAR(50) DEFAULT 'middle' NOT NULL"))
+            print("✅ Migration completed successfully!")

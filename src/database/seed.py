@@ -11,91 +11,245 @@ from src.database.repository import create_global_topic, create_local_topic
 
 TOPICS_DATA = [
     {
-        "name": "Python Core & Computer Science",
-        "priority": 9,
-        "description": "Базовый фундамент языка, на котором пишется весь фреймворк и проходяться секции кодинга.",
-        "local_topics": [
-            {"name": "Data Structures & Complexity", "priority": 10, "description": "Списки, словари, множества, мутабельность, сложность операций O(n)", "allowed_question_types": "Theory,Algorithms,BugHunting"},
-            {"name": "Advanced Python", "priority": 10, "description": "Декораторы, генераторы, итераторы, контекстные менеджеры — это фундамент для понимания Pytest под капотом", "allowed_question_types": "Theory,BugHunting"},
-            {"name": "Asyncio & Concurrency", "priority": 9, "description": "GIL, разница между threading/multiprocessing, асинхронность под капотом", "allowed_question_types": "Theory,BugHunting"},
-            {"name": "OOP & MRO", "priority": 7, "description": "Наследование, инкапсуляция, полиморфизм, миксины, магические методы, порядок разрешения методов", "allowed_question_types": "Theory,BugHunting"},
-            {"name": "Basic Algorithms", "priority": 6, "description": "Задачи уровня LeetCode Easy/Medium на строки и массивы", "allowed_question_types": "Theory,Algorithms"},
-        ]
-    },
-    {
-        "name": "Pytest Framework",
+        "name": "BACKEND & API AUTOMATION",
         "priority": 10,
-        "description": "Твой главный инструмент-раннер, разобранный до молекул.",
+        "description": "Практическое тестирование серверной логики, межсервисного взаимодействия и API. Раздел охватывает методы валидации контрактов, стратегии изоляции тестов с помощью моков и стабов, а также работу с протоколами и брокерами сообщений в контексте проверки бизнес-логики.",
         "local_topics": [
-            {"name": "Fixtures & Scopes", "priority": 10, "description": "Управление фикстурами, yield, автоюз, области видимости session/module/class/function", "allowed_question_types": "Theory,BugHunting"},
-            {"name": "Execution & Parallelism", "priority": 10, "description": "Параллельный запуск через pytest-xdist, изоляция состояния воркеров — самая частая тема на сеньорских собесах", "allowed_question_types": "Theory,TestArch"},
-            {"name": "Conftest & Configuration", "priority": 9, "description": "Каскады conftest.py, кастомные CLI-флаги, инициализация окружения", "allowed_question_types": "Theory,BugHunting,TestArch"},
-            {"name": "Parametrization", "priority": 9, "description": "Data-driven тестирование, динамическое создание тест-кейсов", "allowed_question_types": "Theory,BugHunting,TestDesign"},
-            {"name": "Plugins & Hooks", "priority": 8, "description": "Кастомные плагины, хуки жизненного цикла тестов, например pytest_runtest_makereport", "allowed_question_types": "Theory,BugHunting,TestArch"},
+            {
+                "name": "REST API Testing",
+                "priority": 9,
+                "description": "Практическое тестирование через HTTPx/Requests, работа с XML (SOAP) и JSON (REST), обработка сессий и таймаутов.",
+                "allowed_question_types": "Theory,BugHunting,TestDesign"
+            },
+            {
+                "name": "Kafka Integration Testing",
+                "priority": 8,
+                "description": "Тестирование интеграций через Kafka. Валидация отправки и чтения (producer/consumer), изоляция тестовых данных, консьюмер-группы.",
+                "allowed_question_types": "Theory,TestArch,TestDesign"
+            },
+            {
+                "name": "Data Validation (Pydantic)",
+                "priority": 9,
+                "description": "Контрактные тесты, строгая типизация ответов, валидация JSON-схем, написание кастомных валидаторов.",
+                "allowed_question_types": "Theory,BugHunting"
+            },
+            {
+                "name": "Mocking & Stubbing",
+                "priority": 9,
+                "description": "Создание заглушек, мокирование ответов микросервисов для изоляции E2E тестов.",
+                "allowed_question_types": "Theory,BugHunting,TestArch"
+            }
         ]
     },
     {
-        "name": "Playwright UI Automation",
+        "name": "DATABASES, LINUX & NETWORKS",
+        "priority": 8,
+        "description": "Базовая инфраструктурная грамотность инженера по тестированию. Включает навыки работы с базами данных для подготовки тестовых данных, использование консоли Linux для траблшутинга и чтения логов, а также понимание фундаментальных принципов работы сетей.",
+        "local_topics": [
+            {
+                "name": "PostgreSQL & SQL Basics",
+                "priority": 9,
+                "description": "Практический SQL (JOIN, агрегации, базовые индексы), подготовка, валидация и очистка тестовых данных в БД.",
+                "allowed_question_types": "Theory,Algorithms,BugHunting,TestDesign"
+            },
+            {
+                "name": "ORM (SQLAlchemy) in Testing",
+                "priority": 8,
+                "description": "Использование ORM как фабрики данных для фикстур. Тестирование транзакций, сброс состояния БД после теста (teardown).",
+                "allowed_question_types": "Theory,BugHunting,TestArch"
+            },
+            {
+                "name": "Linux CLI & Troubleshooting",
+                "priority": 8,
+                "description": "Базовые команды (grep, tail, awk), чтение логов, работа с сетью (curl, ping) для дебага падающих тестов.",
+                "allowed_question_types": "Theory,BugHunting"
+            },
+            {
+                "name": "Web & Network Basics",
+                "priority": 9,
+                "description": "Устройство HTTP/HTTPS, заголовки, куки, CORS, статус-коды.",
+                "allowed_question_types": "Theory,BugHunting"
+            }
+        ]
+    },
+    {
+        "name": "INFRASTRUCTURE & CI/CD",
+        "priority": 8,
+        "description": "Инструменты и процессы непрерывной интеграции и доставки автотестов. Раздел посвящен контейнеризации тестовых сред, настройке пайплайнов для регулярного запуска, а также выполнению тестов в распределенных средах и кластерах.",
+        "local_topics": [
+            {
+                "name": "CI/CD Pipelines (GitLab/GitHub/Bamboo)",
+                "priority": 9,
+                "description": "Настройка джоб, триггеры, передача секретов и переменных окружения, кэширование зависимостей.",
+                "allowed_question_types": "Theory,BugHunting,TestArch"
+            },
+            {
+                "name": "Docker Ecosystem & Playwright CI",
+                "priority": 8,
+                "description": "Написание Dockerfile для автотестов, docker-compose для локального окружения. Запуск браузеров в контейнерах, проброс видео и артефактов в CI.",
+                "allowed_question_types": "Theory,BugHunting,TestArch"
+            },
+            {
+                "name": "Kubernetes for SDET",
+                "priority": 7,
+                "description": "Запуск тест-ранов внутри K8s, базовые команды kubectl, траблшутинг падающих подов с тестами, доступ к логам.",
+                "allowed_question_types": "Theory,TestArch"
+            }
+        ]
+    },
+    {
+        "name": "PLAYWRIGHT UI AUTOMATION",
         "priority": 9,
-        "description": "Современный стандарт веб-автоматизации и фронтенд-магии.",
+        "description": "Современный стандарт автоматизации веб-интерфейсов. Фокус на архитектуре Playwright, его механизмах встроенных ожиданий (auto-waiting), изоляции браузерных контекстов и продвинутых техниках перехвата сетевого трафика.",
         "local_topics": [
-            {"name": "Network Interception", "priority": 10, "description": "Перехват, мокирование и подмена API-ответов прямо внутри контекста браузера, роутинг — киллер-фича Playwright", "allowed_question_types": "Theory,BugHunting,TestDesign"},
-            {"name": "Contexts & Auth", "priority": 9, "description": "Изоляция через BrowserContext, сохранение кук/стейта авторизации, многостраничные сценарии", "allowed_question_types": "Theory,BugHunting,TestArch,TestDesign"},
-            {"name": "Locators & Assertions", "priority": 8, "description": "Селекторы, Strict mode, механизмы Auto-waiting, веб-фермы", "allowed_question_types": "Theory,BugHunting,TestDesign"},
-            {"name": "Advanced UI Handling", "priority": 7, "description": "Работа с iframes, Shadow DOM, скачивание файлов, хендлинг алертов", "allowed_question_types": "Theory,BugHunting,TestDesign"},
+            {
+                "name": "Locators & Assertions",
+                "priority": 9,
+                "description": "Селекторы, Strict mode, встроенные веб-ассерты (expect), механизмы Auto-waiting.",
+                "allowed_question_types": "Theory,BugHunting,TestDesign"
+            },
+            {
+                "name": "Network Interception",
+                "priority": 10,
+                "description": "Перехват запросов, подмена API-ответов прямо внутри браузера, блокировка тяжелых ресурсов для ускорения тестов.",
+                "allowed_question_types": "Theory,BugHunting,TestDesign"
+            },
+            {
+                "name": "Contexts & Auth",
+                "priority": 9,
+                "description": "Изоляция через BrowserContext, сохранение стейта авторизации (сохранение кук в файл), многостраничные сценарии.",
+                "allowed_question_types": "Theory,BugHunting,TestArch"
+            },
+            {
+                "name": "Advanced UI & Pytest Integration",
+                "priority": 8,
+                "description": "Работа с iframes, загрузка файлов, использование встроенных фикстур pytest-playwright (page, context).",
+                "allowed_question_types": "Theory,BugHunting,TestDesign"
+            }
         ]
     },
     {
-        "name": "Backend & API Automation",
+        "name": "PYTEST FRAMEWORK",
         "priority": 10,
-        "description": "Инструменты и подходы для тестирования логики без участия UI.",
+        "description": "Глубокое погружение в устройство тест-раннера. Раздел оценивает умение проектировать модульные наборы тестов, управлять жизненным циклом фикстур, параметризировать проверки и безопасно запускать тесты в параллельном режиме.",
         "local_topics": [
-            {"name": "Data Validation (Pydantic)", "priority": 10, "description": "Контрактные тесты, строгая типизация JSON-ответов, кастомные валидаторы", "allowed_question_types": "Theory,BugHunting,TestDesign"},
-            {"name": "Smart Mocking (FastAPI)", "priority": 9, "description": "Создание умных stateful-заглушек вместо статического WireMock", "allowed_question_types": "Theory,BugHunting,TestArch,TestDesign"},
-            {"name": "Advanced Protocols", "priority": 8, "description": "Тестирование очередей сообщений Kafka/RabbitMQ, работа с gRPC и Protobuf", "allowed_question_types": "Theory,BugHunting,TestArch,TestDesign"},
-            {"name": "HTTPx & Async Clients", "priority": 8, "description": "Асинхронные HTTP-клиенты, пулы соединений, таймауты, сессии", "allowed_question_types": "Theory,BugHunting,TestArch,TestDesign"},
+            {
+                "name": "Fixtures & Scopes",
+                "priority": 10,
+                "description": "Управление фикстурами, yield (teardown), области видимости (session/module/function), conftest.py.",
+                "allowed_question_types": "Theory,BugHunting,TestArch"
+            },
+            {
+                "name": "Pytest-Asyncio",
+                "priority": 8,
+                "description": "Написание и запуск асинхронных тестов, работа с асинхронными фикстурами, управление event loop.",
+                "allowed_question_types": "Theory,BugHunting"
+            },
+            {
+                "name": "Parametrization",
+                "priority": 9,
+                "description": "Data-driven тестирование, динамическая генерация кейсов, переопределение фикстур через indirect=True.",
+                "allowed_question_types": "Theory,BugHunting,TestDesign"
+            },
+            {
+                "name": "Execution & Parallelism",
+                "priority": 9,
+                "description": "Запуск через pytest-xdist, потокобезопасность тестов, изоляция стейта между воркерами БД при параллельном запуске.",
+                "allowed_question_types": "Theory,BugHunting,TestArch"
+            }
         ]
     },
     {
-        "name": "Test Architecture & System Design",
+        "name": "PYTHON CORE & TYPING",
+        "priority": 9,
+        "description": "Фундаментальные знания языка Python, необходимые для написания чистого и поддерживаемого кода автотестов. Включает строгую типизацию, объектно-ориентированное программирование для проектирования фреймворка и основы асинхронности.",
+        "local_topics": [
+            {
+                "name": "Type Hinting (PEP 484)",
+                "priority": 8,
+                "description": "Строгая типизация, использование Optional, Union, Callable, Any, TypeVar, настройка Mypy.",
+                "allowed_question_types": "Theory,BugHunting"
+            },
+            {
+                "name": "Data Structures & Memory",
+                "priority": 9,
+                "description": "Списки, словари, множества, мутабельность дефолтных аргументов.",
+                "allowed_question_types": "Theory,Algorithms,BugHunting"
+            },
+            {
+                "name": "Advanced Python",
+                "priority": 10,
+                "description": "Декораторы, генераторы, итераторы, контекстные менеджеры (with).",
+                "allowed_question_types": "Theory,BugHunting"
+            },
+            {
+                "name": "OOP in QA",
+                "priority": 9,
+                "description": "Применение ООП для написания Page Objects, API-клиентов. Наследование, миксины, *args, kwargs.",
+                "allowed_question_types": "Theory,BugHunting,TestArch"
+            },
+            {
+                "name": "Asyncio Basics",
+                "priority": 8,
+                "description": "Понимание корутин, задач (asyncio.create_task), отличия I/O-bound (сеть/ожидания) от CPU-bound задач.",
+                "allowed_question_types": "Theory,BugHunting"
+            }
+        ]
+    },
+    {
+        "name": "TEST AUTOMATION ARCHITECTURE",
         "priority": 10,
-        "description": "Умение собирать отдельные скрипты в поддерживаемую корпоративную систему.",
+        "description": "Проектирование масштабируемой архитектуры тестовых фреймворков. Раздел описывает применение паттернов проектирования в тестировании, стратегии управления тестовыми данными и интеграцию систем отчетности.",
         "local_topics": [
-            {"name": "Test Data Management", "priority": 10, "description": "Стратегии генерации данных, использование Faker, фабрики данных, очистка БД", "allowed_question_types": "Theory,BugHunting,TestArch,TestDesign"},
-            {"name": "Design Patterns", "priority": 8, "description": "Page Object Pattern, Fluent Interface, Screenplay, Factory, Singleton в контексте QA", "allowed_question_types": "Theory,BugHunting,TestArch,TestDesign"},
-            {"name": "Reporting & Observability", "priority": 7, "description": "Интеграция с Allure, кастомное логирование шагов, сбор метрик", "allowed_question_types": "Theory,BugHunting,TestArch"},
+            {
+                "name": "Framework Design Patterns",
+                "priority": 9,
+                "description": "Page Object Pattern, Fluent Interface, Singleton, Data Builder / Factory.",
+                "allowed_question_types": "Theory,BugHunting,TestArch"
+            },
+            {
+                "name": "Test Data Management",
+                "priority": 9,
+                "description": "Стратегии генерации независимых данных, использование библиотек типа Faker, подходы к изоляции (каждый тест создает свои данные).",
+                "allowed_question_types": "Theory,BugHunting,TestArch,TestDesign"
+            },
+            {
+                "name": "Observability & Reporting",
+                "priority": 8,
+                "description": "Интеграция Allure-отчетов, сбор логов выполнения через Kibana, базовое понимание дашбордов Grafana для анализа времени выполнения тестов.",
+                "allowed_question_types": "Theory,BugHunting,TestArch"
+            }
         ]
     },
     {
-        "name": "Infrastructure & CI/CD",
-        "priority": 9,
-        "description": "Окружение, контейнеризация и доставка тестов в продакшн-пайплайн.",
-        "local_topics": [
-            {"name": "Docker Basics", "priority": 9, "description": "Написание оптимальных Dockerfile, слои кэширования, запуск тестов в контейнере", "allowed_question_types": "Theory,BugHunting,TestArch"},
-            {"name": "CI/CD Pipelines", "priority": 9, "description": "GitLab CI / GitHub Actions, триггеры, запуск по расписанию, артефакты", "allowed_question_types": "Theory,TestArch"},
-            {"name": "Docker Compose", "priority": 8, "description": "Поднятие локального окружения: приложение + база + зависимые сервисы", "allowed_question_types": "Theory,BugHunting,TestArch"},
-            {"name": "Distributed Execution", "priority": 8, "description": "Playwright Sharding, масштабирование через Selenoid/Kubernetes", "allowed_question_types": "Theory,BugHunting,TestArch"},
-        ]
-    },
-    {
-        "name": "Databases & Networks",
-        "priority": 9,
-        "description": "Инженерный бэкграунд: как устроены системы под капотом.",
-        "local_topics": [
-            {"name": "SQL & Database Internals", "priority": 9, "description": "Сложные запросы, JOIN, агрегации, индексы, ACID, транзакции", "allowed_question_types": "Theory,BugHunting,TestDesign"},
-            {"name": "Web & Network Basics", "priority": 9, "description": "Устройство HTTP/HTTPS, заголовки, куки, CORS, сессии, REST vs GraphQL", "allowed_question_types": "Theory,BugHunting,TestDesign"},
-            {"name": "ORM (SQLAlchemy)", "priority": 7, "description": "Интеграция ORM в тестовые фикстуры, сессии БД", "allowed_question_types": "Theory,BugHunting,TestArch,TestDesign"},
-        ]
-    },
-    {
-        "name": "QA Mindset & Methodology",
+        "name": "QA MINDSET & METHODOLOGY",
         "priority": 7,
-        "description": "Продуктовое мышление, софт-скиллы и процессы.",
+        "description": "Продуктовое мышление, процессы обеспечения качества и навыки коммуникации. Охватывает стратегии борьбы с нестабильными тестами, подходы к тест-дизайну, метрики эффективности тестирования и поведенческие сценарии.",
         "local_topics": [
-            {"name": "Flaky Tests Management", "priority": 10, "description": "Стратегии борьбы с мигающими тестами, поиск инфраструктурных проблем", "allowed_question_types": "Theory,BugHunting,TestArch,TestDesign"},
-            {"name": "Shift-Left & Test Strategy", "priority": 8, "description": "Пирамида тестирования, включение QA на этапе требований, метрики покрытия", "allowed_question_types": "Theory,TestArch,TestDesign"},
-            {"name": "Behavioral & HR (STAR)", "priority": 7, "description": "Рассказы о факапах, достижениях, перформанс-ревью, софт-скиллах", "allowed_question_types": "Theory,Behavioral"},
-            {"name": "Test Design Techniques", "priority": 6, "description": "Применение Pairwise, эквивалентных классов и граничных значений в автотестах", "allowed_question_types": "Theory,BugHunting,TestDesign"},
+            {
+                "name": "Flaky Tests Management",
+                "priority": 10,
+                "description": "Стратегии поиска плавающих тестов, анализ причин (сеть, моргающий UI, конкуррентность в БД), авторетраи.",
+                "allowed_question_types": "Theory,BugHunting,TestArch,TestDesign"
+            },
+            {
+                "name": "Test Design & Strategy",
+                "priority": 8,
+                "description": "Пирамида тестирования, Shift-Left, оценка тестового покрытия, выбор приоритетов для автоматизации.",
+                "allowed_question_types": "Theory,TestDesign"
+            },
+            {
+                "name": "QA Metrics",
+                "priority": 7,
+                "description": "Метрики автотестов (Pass rate, Time to Resolve, Test Execution Time), интеграция QA-gate в процесс релиза.",
+                "allowed_question_types": "Theory,TestArch"
+            },
+            {
+                "name": "Behavioral (STAR)",
+                "priority": 9,
+                "description": "Разрешение конфликтов с разработчиками, аргументация выбора инструментов, онбординг коллег в автоматизацию.",
+                "allowed_question_types": "Behavioral"
+            }
         ]
     }
 ]

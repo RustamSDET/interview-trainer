@@ -14,7 +14,7 @@ config.DB_PATH = TEST_DB_PATH
 config.DATABASE_URL = f"sqlite:///{TEST_DB_PATH}"
 
 from src.database.connection import init_db, get_db_session
-from src.database.models import QuestionType
+from src.database.models import QuestionType, QuestionGrade
 from src.database.repository import (
     create_global_topic,
     get_all_global_topics,
@@ -80,13 +80,15 @@ def run_tests():
             expected_answer="Уровни изоляции: Read Uncommitted, Read Committed, Repeatable Read, Serializable.",
             question_type=QuestionType.THEORY,
             keywords="ACID, Isolation, Read Committed, Repeatable Read, Serializable, Phantom Read, Dirty Read",
-            code_snippet="-- Пример транзакции\nBEGIN TRANSACTION;\nSELECT * FROM accounts;\nCOMMIT;"
+            code_snippet="-- Пример транзакции\nBEGIN TRANSACTION;\nSELECT * FROM accounts;\nCOMMIT;",
+            grade=QuestionGrade.SENIOR
         )
         question_id = question.id
-        print(f"Created Question: ID={question_id}, Type={question.question_type.value}")
+        print(f"Created Question: ID={question_id}, Type={question.question_type.value}, Grade={question.grade.value}")
         assert question_id is not None
         assert question.question_type == QuestionType.THEORY
         assert question.local_topic_id == local_topic_id
+        assert question.grade == QuestionGrade.SENIOR, "❌ Error: Question grade should be QuestionGrade.SENIOR!"
         assert question.bad_question is False, "❌ Error: Question bad_question should default to False!"
         
         # Test marking question as bad
@@ -145,7 +147,8 @@ def run_tests():
             question_type=QuestionType.THEORY
         )
         recreated_q_id = recreated_q.id
-        print(f"Re-created Question (ID={recreated_q_id}) for cascade testing.")
+        print(f"Re-created Question (ID={recreated_q_id}) for cascade testing with Grade={recreated_q.grade.value}.")
+        assert recreated_q.grade == QuestionGrade.MIDDLE, "❌ Error: Recreated question should default to QuestionGrade.MIDDLE!"
         
     # 6. Test Cascading Deletes (Deleting Global Topic should delete everything under it)
     with get_db_session() as session:

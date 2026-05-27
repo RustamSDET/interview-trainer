@@ -15,7 +15,7 @@ def get_vertex_llm() -> ChatVertexAI:
         project=PROJECT_ID,
         location=LOCATION,
         temperature=0.2,
-        max_output_tokens=8192
+        max_output_tokens=16384
     )
 
 

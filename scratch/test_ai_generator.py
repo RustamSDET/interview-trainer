@@ -64,7 +64,7 @@ def run_ai_generator_test():
                 overwrite=True
             )
             print(f"✅ Success! Generated and stored {count} questions in the database.")
-            assert count == 10, f"Expected 10 questions, but got {count}"
+            assert count == 12, f"Expected 12 questions, but got {count}"
             
         # 5. Query and Print the Generated Questions
         with get_db_session() as session:
@@ -75,13 +75,23 @@ def run_ai_generator_test():
             theory_questions = [q for q in questions if q.question_type == QuestionType.THEORY]
             bug_hunting_questions = [q for q in questions if q.question_type == QuestionType.BUG_HUNTING]
             
-            assert len(theory_questions) == 5, f"Expected 5 Theory questions, got {len(theory_questions)}"
-            assert len(bug_hunting_questions) == 5, f"Expected 5 BugHunting questions, got {len(bug_hunting_questions)}"
+            assert len(theory_questions) == 6, f"Expected 6 Theory questions, got {len(theory_questions)}"
+            assert len(bug_hunting_questions) == 6, f"Expected 6 BugHunting questions, got {len(bug_hunting_questions)}"
             
             for q in theory_questions:
                 assert not q.code_snippet, f"Theory question ID {q.id} has code snippet: '{q.code_snippet}'"
                 
             print("🚀 Verified: All Theory questions have absolutely NO code snippets.")
+            
+            # Verify grade distribution for each type (3 junior, 2 middle, 1 senior)
+            for q_type, q_list in [("Theory", theory_questions), ("BugHunting", bug_hunting_questions)]:
+                juniors = [q for q in q_list if q.grade.value == "junior"]
+                middles = [q for q in q_list if q.grade.value == "middle"]
+                seniors = [q for q in q_list if q.grade.value == "senior"]
+                print(f"Verified {q_type} Grade Distribution: {len(juniors)} Junior, {len(middles)} Middle, {len(seniors)} Senior.")
+                assert len(juniors) == 3, f"Expected 3 Junior questions for {q_type}, got {len(juniors)}"
+                assert len(middles) == 2, f"Expected 2 Middle questions for {q_type}, got {len(middles)}"
+                assert len(seniors) == 1, f"Expected 1 Senior question for {q_type}, got {len(seniors)}"
             
             for i, q in enumerate(questions, 1):
                 print("\n" + "=" * 80)
