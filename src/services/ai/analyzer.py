@@ -110,3 +110,72 @@ def analyze_single_answer(question: str, expected_answer: str, user_answer: str)
     if batch_res.evaluations:
         return batch_res.evaluations[0]
     raise ValueError("Не удалось получить оценку для ответа.")
+
+
+def analyze_answers_individually_batch(items: List[Dict[str, str]]) -> List[SingleAnswerEvaluation]:
+    """
+    Принимает список ответов. Каждый элемент списка должен быть словарем с ключами:
+    - "question"
+    - "expected_answer"
+    - "user_answer"
+    
+    Использует встроенный в langchain метод batch() для параллельной отправки
+    индивидуальных запросов (1 запрос на 1 ответ) к Vertex AI.
+    
+    Возвращает список объектов SingleAnswerEvaluation.
+    """
+    if not items:
+        return []
+        
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", SYSTEM_PROMPT),
+        ("user", USER_PROMPT_SINGLE)
+    ])
+    
+    llm = get_vertex_llm()
+    
+    # Принудительный прогрев для авторизации на главном потоке.
+    # Это предотвращает гонку за получением OAuth-токена в параллельных потоках,
+    # которая часто приводит к ошибкам DNS-резолвинга oauth2.googleapis.com.
+    try:
+        print("DEBUG: [Warmup] Synchronous warmup on main thread to securely cache OAuth credentials...")
+        llm.invoke("warmup")
+    except Exception as warmup_err:
+        print(f"DEBUG: [Warmup Warning] Warmup failed (ignored): {warmup_err}")
+
+    raw_schema = SingleAnswerEvaluation.model_json_schema()
+    flat_json_schema = make_schema_flat(raw_schema)
+    
+    structured_llm = llm.with_structured_output(flat_json_schema, include_raw=True)
+    
+    # Готовим список сообщений (inputs) для batch()
+    batch_messages = []
+    for item in items:
+        formatted_messages = prompt.format_messages(
+            question=item["question"],
+            expected_answer=item["expected_answer"],
+            user_answer=item["user_answer"]
+        )
+        batch_messages.append(formatted_messages)
+        
+    print(f"DEBUG: Invoking AI Analyzer individually with langchain batch() for {len(items)} items...")
+    # langchain's batch() runs these in parallel with safe max_concurrency
+    responses = structured_llm.batch(batch_messages, config={"max_concurrency": 5})
+    
+    evaluations = []
+    for idx, response_dict in enumerate(responses):
+        if not response_dict:
+            raise ValueError(f"Модель вернула пустой результат для элемента {idx}.")
+            
+        ai_response = response_dict.get('parsed')
+        if ai_response is None:
+            raise ValueError(f"Ошибка парсинга ответа модели для элемента {idx}. Подробности: {response_dict.get('parsing_error')}")
+            
+        if isinstance(ai_response, dict):
+            ai_response["index"] = idx
+            
+        eval_item = SingleAnswerEvaluation.model_validate(ai_response)
+        evaluations.append(eval_item)
+        
+    return evaluations
+

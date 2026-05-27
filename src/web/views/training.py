@@ -71,6 +71,12 @@ def render_training():
 
         with st.form("sandbox_config_form"):
             num_q = st.slider("Количество вопросов в сессии", min_value=1, max_value=20, value=5, step=1, help="Выберите, сколько вопросов вы хотите пройти за этот раунд.")
+            analysis_mode_opt = st.radio(
+                "Режим оценки ответов в ИИ",
+                options=["Анализ батчами (быстро и экономично)", "Анализ ответов по одному (детально, langchain batch)"],
+                index=0,
+                help="Анализ батчами группирует до 5 ответов в один запрос ИИ. Анализ по одному отправляет каждый ответ отдельно в параллельном режиме."
+            )
             start_session_btn = st.form_submit_button("🚀 Начать тренировочную сессию", type="primary", use_container_width=True)
 
         if start_session_btn:
@@ -105,6 +111,7 @@ def render_training():
                     st.session_state.sandbox_show_expected = False
                     st.session_state.sandbox_ratings = []
                     st.session_state.sandbox_answers = {}
+                    st.session_state.sandbox_analysis_mode = "batch" if "Анализ батчами" in analysis_mode_opt else "single"
                     session_created = True
                     
             if session_created:
@@ -335,14 +342,21 @@ def render_training():
             # Evaluate all pending voice answers in a single batch!
             voice_answers = [ans for ans in st.session_state.sandbox_answers.values() if ans.get("is_voice") and not ans.get("ai_evaluated")]
             if voice_answers:
-                with st.spinner("🤖 ИИ анализирует ваши ответы в едином запросе... Пожалуйста, подождите."):
+                mode = st.session_state.get("sandbox_analysis_mode", "batch")
+                spinner_msg = (
+                    "🤖 ИИ параллельно анализирует ваши ответы по одному (langchain batch)... Пожалуйста, подождите."
+                    if mode == "single"
+                    else "🤖 ИИ анализирует ваши ответы в едином запросе... Пожалуйста, подождите."
+                )
+                with st.spinner(spinner_msg):
                     with get_db_session() as session:
                         try:
                             # Use our batch evaluator
                             eval_results = manager.evaluate_transcribed_answers_batch(
                                 db_session=session,
                                 session_id=st.session_state.sandbox_session_id,
-                                answers_data=voice_answers
+                                answers_data=voice_answers,
+                                analysis_mode=mode
                             )
                             
                             # Update our session state ratings with evaluated batch results

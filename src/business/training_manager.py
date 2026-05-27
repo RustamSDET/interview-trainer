@@ -68,10 +68,16 @@ class TrainingManager:
         self,
         db_session: DBSession,
         session_id: int,
-        answers_data: List[Dict[str, Any]]
+        answers_data: List[Dict[str, Any]],
+        analysis_mode: str = "batch"
     ) -> List[Dict[str, Any]]:
         """
-        Evaluates a list of transcribed answers using Vertex AI batch analysis (max 5 per batch).
+        Evaluates a list of transcribed answers using Vertex AI batch analysis.
+        If analysis_mode is "batch":
+            Uses batch analysis (max 5 per batch, BatchAnswerEvaluation).
+        If analysis_mode is "single":
+            Uses langchain's batch() method to evaluate each answer individually in parallel (SingleAnswerEvaluation).
+            
         Saves all results to SQLite (AnswerHistory and AIAnswerEvaluation) and returns the list
         of structured evaluation details.
         
@@ -89,42 +95,29 @@ class TrainingManager:
         if not answers_data:
             return []
             
-        from src.services.ai.analyzer import analyze_answers_batch
+        from src.services.ai.analyzer import analyze_answers_batch, analyze_answers_individually_batch
         from sqlalchemy import select
         from src.database.models import AnswerHistory, AIAnswerEvaluation
         
-        # Split answers into chunks of max 5 items
-        chunk_size = 5
-        chunks = [answers_data[i:i + chunk_size] for i in range(0, len(answers_data), chunk_size)]
-        
         evaluated_results = []
         
-        for chunk in chunks:
-            # Prepare items for the AI analyzer
+        if analysis_mode == "single":
+            # Prepare items for individual AI analyzer
             items = [
                 {
                     "question": item["question_text"],
                     "expected_answer": item["expected_answer"],
                     "user_answer": item["transcribed_text"]
                 }
-                for item in chunk
+                for item in answers_data
             ]
             
-            # Call the batch AI analyzer
-            batch_eval = analyze_answers_batch(items)
+            # Call individual batch AI analyzer
+            evaluations = analyze_answers_individually_batch(items)
             
-            # Process the evaluations and match back by index
-            for idx, item in enumerate(chunk):
-                # Find matching evaluation by index
-                eval_item = None
-                for ev in batch_eval.evaluations:
-                    if ev.index == idx:
-                        eval_item = ev
-                        break
-                
-                if not eval_item:
-                    # Fallback if indices are mismatching (should not happen)
-                    eval_item = batch_eval.evaluations[idx] if idx < len(batch_eval.evaluations) else batch_eval.evaluations[0]
+            # Process evaluations
+            for idx, item in enumerate(answers_data):
+                eval_item = evaluations[idx]
                 
                 # Save to DB
                 q_id = item.get("question_id") or item.get("id")
@@ -183,6 +176,99 @@ class TrainingManager:
                     "criteria": criteria_list_dict,
                     "record_id": db_history_record.id
                 })
+                
+        else: # Default batch mode
+            # Split answers into chunks of max 5 items
+            chunk_size = 5
+            chunks = [answers_data[i:i + chunk_size] for i in range(0, len(answers_data), chunk_size)]
+            
+            for chunk in chunks:
+                # Prepare items for the AI analyzer
+                items = [
+                    {
+                        "question": item["question_text"],
+                        "expected_answer": item["expected_answer"],
+                        "user_answer": item["transcribed_text"]
+                    }
+                    for item in chunk
+                ]
+                
+                # Call the batch AI analyzer
+                batch_eval = analyze_answers_batch(items)
+                
+                # Process the evaluations and match back by index
+                for idx, item in enumerate(chunk):
+                    # Find matching evaluation by index
+                    eval_item = None
+                    for ev in batch_eval.evaluations:
+                        if ev.index == idx:
+                            eval_item = ev
+                            break
+                    
+                    if not eval_item:
+                        # Fallback if indices are mismatching (should not happen)
+                        eval_item = batch_eval.evaluations[idx] if idx < len(batch_eval.evaluations) else batch_eval.evaluations[0]
+                    
+                    # Save to DB
+                    q_id = item.get("question_id") or item.get("id")
+                    
+                    stmt = select(AnswerHistory).where(
+                        AnswerHistory.session_id == session_id,
+                        AnswerHistory.question_id == q_id
+                    )
+                    db_history_record = db_session.scalar(stmt)
+                    
+                    if db_history_record:
+                        db_history_record.transcribed_text = item["transcribed_text"]
+                        db_history_record.confidence_score = eval_item.score
+                        db_history_record.evaluation_status = "Great" if eval_item.score >= 8 else "Good" if eval_item.score >= 5 else "Bad"
+                    else:
+                        db_history_record = create_answer_history(
+                            db=db_session,
+                            session_id=session_id,
+                            question_id=q_id,
+                            confidence_score=eval_item.score,
+                            transcribed_text=item["transcribed_text"],
+                            evaluation_status="Great" if eval_item.score >= 8 else "Good" if eval_item.score >= 5 else "Bad"
+                        )
+                    
+                    # Serialize criteria
+                    criteria_list_dict = [c.model_dump() for c in eval_item.criteria]
+                    criteria_json_str = json.dumps(criteria_list_dict, ensure_ascii=False)
+                    
+                    # Clear existing evaluations
+                    stmt_eval = select(AIAnswerEvaluation).where(AIAnswerEvaluation.answer_history_id == db_history_record.id)
+                    existing_eval = db_session.scalar(stmt_eval)
+                    if existing_eval:
+                        db_session.delete(existing_eval)
+                        db_session.flush()
+                    
+                    create_ai_answer_evaluation(
+                        db=db_session,
+                        answer_history_id=db_history_record.id,
+                        score=eval_item.score,
+                        what_was_good=eval_item.what_was_good,
+                        what_was_bad_or_missing=eval_item.what_was_bad_or_missing,
+                        verdict=eval_item.verdict,
+                        summary=eval_item.summary,
+                        criteria_json=criteria_json_str
+                    )
+                    
+                    evaluated_results.append({
+                        "id": q_id,
+                        "question_text": item["question_text"],
+                        "transcribed_text": item["transcribed_text"],
+                        "score": eval_item.score,
+                        "what_was_good": eval_item.what_was_good,
+                        "what_was_bad_or_missing": eval_item.what_was_bad_or_missing,
+                        "verdict": eval_item.verdict,
+                        "summary": eval_item.summary,
+                        "criteria": criteria_list_dict,
+                        "record_id": db_history_record.id
+                    })
+                    
+        return evaluated_results
+
                 
         return evaluated_results
 
