@@ -37,7 +37,7 @@ class LocalTopic(Base):
     __tablename__ = "local_topics"
     
     id: Mapped[int] = mapped_column(primary_key=True)
-    global_topic_id: Mapped[int] = mapped_column(ForeignKey("global_topics.id", ondelete="CASCADE"), nullable=False)
+    global_topic_id: Mapped[int] = mapped_column(ForeignKey("global_topics.id", ondelete="CASCADE"), index=True, nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     priority: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
@@ -53,13 +53,13 @@ class Question(Base):
     __tablename__ = "questions"
     
     id: Mapped[int] = mapped_column(primary_key=True)
-    local_topic_id: Mapped[int] = mapped_column(ForeignKey("local_topics.id", ondelete="CASCADE"), nullable=False)
+    local_topic_id: Mapped[int] = mapped_column(ForeignKey("local_topics.id", ondelete="CASCADE"), index=True, nullable=False)
     question_text: Mapped[str] = mapped_column(Text, nullable=False)
     expected_answer: Mapped[str] = mapped_column(Text, nullable=False)
     question_type: Mapped[QuestionType] = mapped_column(Enum(QuestionType), nullable=False)
     keywords: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Comma-separated keywords
     code_snippet: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    bad_question: Mapped[bool] = mapped_column(default=False, nullable=False)
+    bad_question: Mapped[bool] = mapped_column(default=False, index=True, nullable=False)
     grade: Mapped[QuestionGrade] = mapped_column(Enum(QuestionGrade), nullable=False, default=QuestionGrade.MIDDLE)
     
     local_topic: Mapped["LocalTopic"] = relationship(back_populates="questions")
@@ -97,3 +97,21 @@ class AnswerHistory(Base):
     
     session: Mapped["Session"] = relationship(back_populates="answers")
     question: Mapped["Question"] = relationship(back_populates="answers")
+    evaluation: Mapped[Optional["AIAnswerEvaluation"]] = relationship(
+        back_populates="answer_history", cascade="all, delete-orphan", uselist=False
+    )
+
+class AIAnswerEvaluation(Base):
+    __tablename__ = "ai_answer_evaluations"
+    
+    id: Mapped[int] = mapped_column(primary_key=True)
+    answer_history_id: Mapped[int] = mapped_column(ForeignKey("answer_histories.id", ondelete="CASCADE"), unique=True, index=True, nullable=False)
+    score: Mapped[int] = mapped_column(Integer, nullable=False)
+    what_was_good: Mapped[str] = mapped_column(Text, nullable=False)
+    what_was_bad_or_missing: Mapped[str] = mapped_column(Text, nullable=False)
+    verdict: Mapped[str] = mapped_column(Text, nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    criteria_json: Mapped[str] = mapped_column(Text, nullable=False)  # JSON representation of CriterionEvaluation list
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    answer_history: Mapped["AnswerHistory"] = relationship(back_populates="evaluation")

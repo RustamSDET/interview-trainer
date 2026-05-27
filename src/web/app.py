@@ -170,6 +170,7 @@ st.markdown("""
 # DATABASE DATA LOADING (With Streamlit Caching)
 # ---------------------------------------------------------
 
+@st.cache_data
 def load_hierarchy_data():
     """
     Fetches the entire Topics -> Subtopics -> Questions hierarchy from SQLite.
@@ -210,8 +211,23 @@ def load_hierarchy_data():
             hierarchy.append(gt_data)
         return hierarchy
 
-# Load the cached data
-hierarchy = load_hierarchy_data()
+@st.cache_data
+def load_sidebar_stats():
+    """
+    Computes global database metrics from cached hierarchy.
+    """
+    hierarchy_data = load_hierarchy_data()
+    total_globals = len(hierarchy_data)
+    total_locals = sum(len(gt["local_topics"]) for gt in hierarchy_data)
+    active_questions = sum(sum(len([q for q in lt["questions"] if not q["bad_question"]]) for lt in gt["local_topics"]) for gt in hierarchy_data)
+    bad_questions = sum(sum(len([q for q in lt["questions"] if q["bad_question"]]) for lt in gt["local_topics"]) for gt in hierarchy_data)
+    return {
+        "total_globals": total_globals,
+        "total_locals": total_locals,
+        "active_questions": active_questions,
+        "bad_questions": bad_questions
+    }
+
 
 # ---------------------------------------------------------
 # SIDEBAR NAVIGATION & STATS
@@ -221,21 +237,41 @@ with st.sidebar:
     st.markdown("<div style='text-align: center; padding: 20px 0;'><h2 style='color: #818cf8; margin: 0;'>🎓 SDET Trainer</h2><small style='color: #64748b;'>Python Interview Sandbox</small></div>", unsafe_allow_html=True)
     st.write("---")
     
-    # Calculate global database metrics
-    total_globals = len(hierarchy)
-    total_locals = sum(len(gt["local_topics"]) for gt in hierarchy)
-    active_questions = sum(sum(len([q for q in lt["questions"] if not q["bad_question"]]) for lt in gt["local_topics"]) for gt in hierarchy)
-    bad_questions = sum(sum(len([q for q in lt["questions"] if q["bad_question"]]) for lt in gt["local_topics"]) for gt in hierarchy)
+    # Clean, modern dynamic navigation
+    active_tab = st.radio(
+        "🧭 Раздел меню",
+        ["🥋 Тренировочный лагерь (Training)", "📚 База вопросов", "🔮 Генерация вопросов ИИ"],
+        index=0  # Default to Training for immediate user focus
+    )
+    st.write("---")
+
+    # Audio Language Selection with default from .env
+    from src.config import AUDIO_LANGUAGE
+    if "audio_language" not in st.session_state:
+        st.session_state.audio_language = AUDIO_LANGUAGE
+        
+    st.markdown("### 🌐 Настройки звука (Audio)")
+    selected_lang = st.selectbox(
+        "Язык озвучки и STT",
+        ["English", "Русский"],
+        index=0 if st.session_state.audio_language == "en" else 1,
+        key="lang_selector"
+    )
+    st.session_state.audio_language = "en" if selected_lang == "English" else "ru"
+    st.write("---")
+    
+    # Calculate global database metrics using cached stats
+    stats = load_sidebar_stats()
     
     # Metrics display in sidebar
     st.markdown("### 📊 Статистика базы")
     col1, col2 = st.columns(2)
     with col1:
-        st.metric(label="Темы", value=total_globals)
-        st.metric(label="Подтемы", value=total_locals)
+        st.metric(label="Темы", value=stats["total_globals"])
+        st.metric(label="Подтемы", value=stats["total_locals"])
     with col2:
-        st.metric(label="Вопросы", value=active_questions)
-        st.metric(label="Забраковано", value=bad_questions)
+        st.metric(label="Вопросы", value=stats["active_questions"])
+        st.metric(label="Забраковано", value=stats["bad_questions"])
         
     st.write("---")
     st.markdown("### 🧠 О системе")
@@ -252,15 +288,14 @@ with st.sidebar:
 st.title("Python SDET Interview Trainer")
 st.markdown("<p style='color: #94a3b8; font-size: 1.1rem; margin-top: -10px;'>Многоуровневый интерактивный тренажер технических интервью</p>", unsafe_allow_html=True)
 
-# Define Tabs
-tab_db, tab_gen, tab_train = st.tabs(["📚 База вопросов", "🔮 Генерация вопросов", "🥋 Тренировка (Training)"])
-
-# Route Tabs to Modular Views
-with tab_db:
+# Dynamic Router - evaluates and renders ONLY the selected view, avoiding thousands of inactive widgets
+if active_tab == "🥋 Тренировочный лагерь (Training)":
+    render_training()
+elif active_tab == "📚 База вопросов":
+    hierarchy = load_hierarchy_data()
     render_db_browser(hierarchy)
-
-with tab_gen:
+elif active_tab == "🔮 Генерация вопросов ИИ":
+    hierarchy = load_hierarchy_data()
     render_generator(hierarchy)
 
-with tab_train:
-    render_training()
+

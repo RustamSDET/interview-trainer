@@ -60,3 +60,12 @@ def init_db():
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE questions ADD COLUMN grade VARCHAR(50) DEFAULT 'middle' NOT NULL"))
             print("✅ Migration completed successfully!")
+
+        # Safe Index Migrations for SQLite
+        print("🔧 Index Migration: Checking and creating performance indexes...")
+        with engine.begin() as conn:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_questions_local_topic_id ON questions (local_topic_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_questions_bad_question ON questions (bad_question)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_local_topics_global_topic_id ON local_topics (global_topic_id)"))
+        print("✅ Index Migration completed successfully!")
+

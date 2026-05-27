@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from src.database.models import GlobalTopic, LocalTopic, Question, QuestionType, QuestionGrade, Session as DBSession, AnswerHistory
+from src.database.models import GlobalTopic, LocalTopic, Question, QuestionType, QuestionGrade, Session as DBSession, AnswerHistory, AIAnswerEvaluation
 
 # --- Global Topic CRUD ---
 
@@ -227,3 +227,30 @@ def create_answer_history(
     db.add(answer_obj)
     db.flush()
     return answer_obj
+
+def create_ai_answer_evaluation(
+    db: Session,
+    answer_history_id: int,
+    score: int,
+    what_was_good: str,
+    what_was_bad_or_missing: str,
+    verdict: str,
+    summary: str,
+    criteria_json: str
+) -> AIAnswerEvaluation:
+    """
+    Saves an AI evaluation report for a specific answer history entry.
+    """
+    eval_obj = AIAnswerEvaluation(
+        answer_history_id=answer_history_id,
+        score=score,
+        what_was_good=what_was_good,
+        what_was_bad_or_missing=what_was_bad_or_missing,
+        verdict=verdict,
+        summary=summary,
+        criteria_json=criteria_json,
+        created_at=datetime.utcnow()
+    )
+    db.add(eval_obj)
+    db.flush()
+    return eval_obj

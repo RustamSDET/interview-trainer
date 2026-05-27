@@ -1,5 +1,4 @@
 from typing import List, Optional, Dict, TypedDict
-from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 from langchain_core.prompts import ChatPromptTemplate
@@ -9,40 +8,7 @@ from src.services.ai.base import get_vertex_llm
 from src.services.ai.prompts import SYSTEM_PROMPT, USER_PROMPT, TYPE_REQUIREMENTS
 from src.database.models import GlobalTopic, LocalTopic, Question, QuestionType, QuestionGrade
 from src.database.repository import create_question
-
-
-# --- Pydantic Schemas for Structured Output ---
-
-class GeneratedQuestion(BaseModel):
-    """Схема одного сгенерированного вопроса для интервью"""
-    text: str = Field(
-        ...,
-        description="Текст вопроса. Должен быть глубоким, конкретным, соответствующим заданной теме и типу вопроса."
-    )
-    expected_answer: str = Field(
-        ...,
-        description="Подробный, развернутый эталонный ответ со всеми техническими деталями и обоснованием."
-    )
-    keywords: str = Field(
-        ...,
-        description="Ключевые слова и технические термины через запятую. Если ключевых слов нет, пустая строка."
-    )
-    code_snippet: str = Field(
-        ...,
-        description="Опциональный кусок кода (обязателен для BugHunting с багом и для Algorithms с шаблоном). Если код не требуется, пустая строка."
-    )
-    grade: str = Field(
-        ...,
-        description="Уровень сложности вопроса. Должен быть строго один из: junior, middle, senior."
-    )
-
-
-class GeneratedQuestions(BaseModel):
-    """Схема списка сгенерированных вопросов"""
-    questions: List[GeneratedQuestion] = Field(
-        ...,
-        description="Список из ровно 6 уникальных высококачественных вопросов (3 уровня junior, 2 уровня middle, 1 уровня senior)."
-    )
+from src.services.ai.schemas import GeneratedQuestion, GeneratedQuestions
 
 
 # --- Helper to flatten nested JSON schemas (resolving $defs/$ref) for Vertex AI ---
