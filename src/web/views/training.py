@@ -1,4 +1,5 @@
 import streamlit as st
+from pathlib import Path
 from src.database.connection import get_db_session
 from src.database.repository import (
     create_training_session,
@@ -42,6 +43,8 @@ def render_training():
         st.session_state.sandbox_session_id = None
     if "sandbox_ratings" not in st.session_state:
         st.session_state.sandbox_ratings = []
+    if "sandbox_answers" not in st.session_state:
+        st.session_state.sandbox_answers = {}
 
     # Get the TrainingManager instance based on active language in sidebar
     audio_lang = st.session_state.get("audio_language", "en")
@@ -101,6 +104,7 @@ def render_training():
                     st.session_state.sandbox_finished = False
                     st.session_state.sandbox_show_expected = False
                     st.session_state.sandbox_ratings = []
+                    st.session_state.sandbox_answers = {}
                     session_created = True
                     
             if session_created:
@@ -112,6 +116,7 @@ def render_training():
 
     # 2. State: Active Training Session
     elif st.session_state.sandbox_session_active:
+        user_audio = None
         questions = st.session_state.sandbox_questions
         idx = st.session_state.sandbox_current_index
         total_q = len(questions)
@@ -209,6 +214,183 @@ def render_training():
                 autoplay=True
             )
 
+        # Define local helper for final evaluations of all recorded voice answers
+        def trigger_final_evaluation(current_user_audio=None):
+            # If the current question has audio and is not transcribed yet, trigger transcription background task
+            if current_user_audio is not None and idx not in st.session_state.sandbox_answers:
+                try:
+                    audio_bytes = current_user_audio.read()
+                    temp_dir = Path("data/audio")
+                    temp_dir.mkdir(parents=True, exist_ok=True)
+                    temp_audio_path = temp_dir / f"session_{st.session_state.sandbox_session_id}_q_{q['id']}_temp.wav"
+                    with open(temp_audio_path, "wb") as f:
+                        f.write(audio_bytes)
+                    
+                    st.session_state.sandbox_answers[idx] = {
+                        "id": q["id"],
+                        "question_text": q["question_text"],
+                        "expected_answer": q["expected_answer"],
+                        "question_type": q["question_type"],
+                        "transcribed_text": "(Распознавание речи...)",
+                        "is_voice": True,
+                        "ai_evaluated": False,
+                        "transcribing": True,
+                        "temp_audio_path": temp_audio_path
+                    }
+                    
+                    import threading
+                    def run_bg_transcription(sess_id, q_id, q_idx, file_path):
+                        try:
+                            transcribed = manager.audio_manager.process_user_audio(file_path)
+                            if not transcribed:
+                                transcribed = "(Тишина или неразборчивая речь)"
+                            
+                            if "sandbox_answers" in st.session_state and q_idx in st.session_state.sandbox_answers:
+                                st.session_state.sandbox_answers[q_idx]["transcribed_text"] = transcribed
+                                st.session_state.sandbox_answers[q_idx]["transcribing"] = False
+                                
+                            with get_db_session() as session:
+                                from sqlalchemy import select
+                                from src.database.models import AnswerHistory
+                                stmt = select(AnswerHistory).where(
+                                    AnswerHistory.session_id == sess_id,
+                                    AnswerHistory.question_id == q_id
+                                )
+                                db_history = session.scalar(stmt)
+                                if db_history:
+                                    db_history.transcribed_text = transcribed
+                                else:
+                                    create_answer_history(
+                                        db=session,
+                                        session_id=sess_id,
+                                        question_id=q_id,
+                                        confidence_score=0,
+                                        transcribed_text=transcribed,
+                                        evaluation_status="Pending"
+                                    )
+                        except Exception as th_err:
+                            print(f"Error in bg transcription: {th_err}")
+                            if "sandbox_answers" in st.session_state and q_idx in st.session_state.sandbox_answers:
+                                st.session_state.sandbox_answers[q_idx]["transcribing"] = False
+                    
+                    threading.Thread(
+                        target=run_bg_transcription,
+                        args=(st.session_state.sandbox_session_id, q["id"], idx, temp_audio_path)
+                    ).start()
+                except Exception as e:
+                    st.error(f"Ошибка при сохранении последнего ответа: {e}")
+
+            # Transcribe any pending answers synchronously now to prevent deadlocks and show proper UI progress state!
+            pending_items = [
+                (q_idx, ans) for q_idx, ans in st.session_state.sandbox_answers.items()
+                if ans.get("is_voice") and ans.get("transcribing", False)
+            ]
+            
+            if pending_items:
+                with st.spinner("🎤 Завершаем распознавание речи... Пожалуйста, подождите."):
+                    for q_idx, ans in pending_items:
+                        try:
+                            file_path = ans.get("temp_audio_path")
+                            if file_path and file_path.exists():
+                                transcribed = manager.audio_manager.process_user_audio(file_path)
+                                if not transcribed:
+                                    transcribed = "(Тишина или неразборчивая речь)"
+                                
+                                ans["transcribed_text"] = transcribed
+                                ans["transcribing"] = False
+                                
+                                # Update database record
+                                with get_db_session() as session:
+                                    from sqlalchemy import select
+                                    from src.database.models import AnswerHistory
+                                    stmt = select(AnswerHistory).where(
+                                        AnswerHistory.session_id == st.session_state.sandbox_session_id,
+                                        AnswerHistory.question_id == ans["id"]
+                                    )
+                                    db_history = session.scalar(stmt)
+                                    if db_history:
+                                        db_history.transcribed_text = transcribed
+                                    else:
+                                        create_answer_history(
+                                            db=session,
+                                            session_id=st.session_state.sandbox_session_id,
+                                            question_id=ans["id"],
+                                            confidence_score=0,
+                                            transcribed_text=transcribed,
+                                            evaluation_status="Pending"
+                                        )
+                        except Exception as sync_err:
+                            print(f"Error in sync transcription: {sync_err}")
+                            ans["transcribing"] = False
+
+            # Bounded final wait for any active thread, just in case (max 10 seconds)
+            import time
+            for _ in range(20):
+                any_transcribing = any(ans.get("transcribing", False) for ans in st.session_state.sandbox_answers.values())
+                if any_transcribing:
+                    time.sleep(0.5)
+                else:
+                    break
+
+            # Evaluate all pending voice answers in a single batch!
+            voice_answers = [ans for ans in st.session_state.sandbox_answers.values() if ans.get("is_voice") and not ans.get("ai_evaluated")]
+            if voice_answers:
+                with st.spinner("🤖 ИИ анализирует ваши ответы в едином запросе... Пожалуйста, подождите."):
+                    with get_db_session() as session:
+                        try:
+                            # Use our batch evaluator
+                            eval_results = manager.evaluate_transcribed_answers_batch(
+                                db_session=session,
+                                session_id=st.session_state.sandbox_session_id,
+                                answers_data=voice_answers
+                            )
+                            
+                            # Update our session state ratings with evaluated batch results
+                            for res in eval_results:
+                                # Find corresponding answer in state and update it
+                                for q_idx, ans in st.session_state.sandbox_answers.items():
+                                    if ans["id"] == res["id"]:
+                                        ans["ai_evaluated"] = True
+                                        ans["ai_result"] = {
+                                            "score": res["score"],
+                                            "criteria": res["criteria"],
+                                            "what_was_good": res["what_was_good"],
+                                            "what_was_bad_or_missing": res["what_was_bad_or_missing"],
+                                            "verdict": res["verdict"],
+                                            "summary": res["summary"],
+                                            "transcribed_text": res["transcribed_text"]
+                                        }
+                                        ans["rating"] = res["score"]
+                                        break
+                                
+                                # Add to sandbox_ratings
+                                st.session_state.sandbox_ratings.append({
+                                    "id": res["id"],
+                                    "question_text": res["question_text"],
+                                    "question_type": next(ans["question_type"] for ans in voice_answers if ans["id"] == res["id"]),
+                                    "rating": res["score"],
+                                    "ai_evaluated": True,
+                                    "verdict": res["verdict"],
+                                    "transcribed_text": res["transcribed_text"],
+                                    "ai_result": {
+                                        "score": res["score"],
+                                        "criteria": res["criteria"],
+                                        "what_was_good": res["what_was_good"],
+                                        "what_was_bad_or_missing": res["what_was_bad_or_missing"],
+                                        "verdict": res["verdict"],
+                                        "summary": res["summary"],
+                                        "transcribed_text": res["transcribed_text"]
+                                    }
+                                })
+                        except Exception as eval_err:
+                            st.error(f"Ошибка при батч-оценке ответов: {eval_err}")
+            
+            with get_db_session() as session:
+                finish_training_session(session, st.session_state.sandbox_session_id)
+            st.session_state.sandbox_session_active = False
+            st.session_state.sandbox_finished = True
+            st.rerun()
+
         # Control Buttons Row
         st.write("")
         col_show, col_bad, col_finish, col_spacer = st.columns([0.3, 0.25, 0.25, 0.2])
@@ -229,21 +411,13 @@ def render_training():
                     st.session_state.sandbox_current_index += 1
                     st.session_state.sandbox_show_expected = False
                 else:
-                    # If it was the last question, finish the session
-                    with get_db_session() as session:
-                        finish_training_session(session, st.session_state.sandbox_session_id)
-                    st.session_state.sandbox_session_active = False
-                    st.session_state.sandbox_finished = True
+                    trigger_final_evaluation(None)
                 
                 st.rerun()
 
         with col_finish:
             if st.button("🏁 Завершить досрочно", key="sandbox_early_finish", help="Завершить тренировку сейчас и показать результаты пройденных вопросов", use_container_width=True):
-                with get_db_session() as session:
-                    finish_training_session(session, st.session_state.sandbox_session_id)
-                st.session_state.sandbox_session_active = False
-                st.session_state.sandbox_finished = True
-                st.rerun()
+                trigger_final_evaluation(user_audio)
 
         # 🎙️ Voice Input and AI Evaluation Block
         st.write("")
@@ -251,104 +425,78 @@ def render_training():
         user_audio = st.audio_input("Record your answer", key=f"audio_input_{q['id']}")
 
         if user_audio is not None:
-            if not st.session_state.get("sandbox_voice_submitted", False):
-                if st.button("🚀 Отправить устный ответ на оценку AI", type="primary", key=f"btn_ai_eval_{q['id']}", use_container_width=True):
-                    with st.spinner("Локальная транскрибация голоса и оценка AI..."):
-                        try:
-                            audio_bytes = user_audio.read()
-                            with get_db_session() as db_session:
-                                result = manager.process_and_evaluate_answer(
-                                    db_session=db_session,
-                                    session_id=st.session_state.sandbox_session_id,
-                                    question_id=q["id"],
-                                    question_text=q["question_text"],
-                                    expected_answer=q["expected_answer"],
-                                    audio_bytes=audio_bytes
-                                )
-                                st.session_state.sandbox_ai_eval_result = result
-                                st.session_state.sandbox_voice_submitted = True
-                                
-                                # Add to local session ratings
-                                st.session_state.sandbox_ratings.append({
-                                    "id": q["id"],
-                                    "question_text": q["question_text"],
-                                    "question_type": q["question_type"],
-                                    "rating": result["score"],
-                                    "ai_evaluated": True,
-                                    "verdict": result["summary"]
-                                })
-                            st.toast("Ответ успешно проанализирован AI!", icon="✅")
-                            st.rerun()
-                        except Exception as eval_err:
-                            st.error(f"Ошибка при анализе устного ответа: {eval_err}")
-
-        # Render Premium AI Results Block if voice answer is evaluated
-        if st.session_state.get("sandbox_voice_submitted", False) and st.session_state.sandbox_ai_eval_result:
-            result = st.session_state.sandbox_ai_eval_result
-            
-            st.markdown("---")
-            st.markdown("### 📊 Результаты оценки ИИ (AI Evaluation)")
-            
-            st.metric(label="ИИ Оценка (Общая)", value=f"{result['score']} / 10")
-            
-            st.markdown(f"**Ваш распознанный ответ (STT):**")
-            st.info(result['transcribed_text'])
-            
-            with st.expander("🔍 Подробный разбор ответа (Критерии и детали)", expanded=True):
-                # Criteria Scores Columns
-                st.markdown("##### Оценки по критериям:")
-                crit_cols = st.columns(len(result['criteria']))
-                for c_idx, crit in enumerate(result['criteria']):
-                    with crit_cols[c_idx]:
-                        st.markdown(f"""
-                        <div style="text-align: center; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 8px;">
-                            <small style="color: #94a3b8; font-weight: 600;">{crit['criterion']}</small>
-                            <h3 style="color: #818cf8; margin: 5px 0;">{crit['score']} / 10</h3>
-                            <p style="color: #cbd5e1; font-size: 0.8rem; margin: 0; line-height: 1.2;">{crit['explanation']}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                
-                st.write("")
-                # Strengths vs Weaknesses side-by-side
-                col_good, col_bad = st.columns(2)
-                with col_good:
-                    st.markdown(f"""
-                    <div style="background: rgba(16, 185, 129, 0.05); border-left: 4px solid #10b981; padding: 15px; border-radius: 4px; height: 100%;">
-                        <strong style="color: #34d399; font-size: 0.95rem;">🟢 Что было хорошо:</strong>
-                        <p style="color: #cbd5e1; font-size: 0.9rem; margin-top: 8px; line-height: 1.5;">{result['what_was_good']}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                with col_bad:
-                    st.markdown(f"""
-                    <div style="background: rgba(239, 68, 68, 0.05); border-left: 4px solid #ef4444; padding: 15px; border-radius: 4px; height: 100%;">
-                        <strong style="color: #f87171; font-size: 0.95rem;">🔴 Чего не хватило / Ошибки:</strong>
-                        <p style="color: #cbd5e1; font-size: 0.9rem; margin-top: 8px; line-height: 1.5;">{result['what_was_bad_or_missing']}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                st.write("")
-                # Verdict & Recommendations
-                st.markdown(f"""
-                <div style="background: rgba(99, 102, 241, 0.05); border-left: 4px solid #6366f1; padding: 15px; border-radius: 4px;">
-                    <strong style="color: #818cf8; font-size: 0.95rem;">💡 Резюме и Вердикт:</strong>
-                    <p style="color: #cbd5e1; font-size: 0.9rem; margin-top: 8px; line-height: 1.5;">{result['verdict']}</p>
-                </div>
-                """, unsafe_allow_html=True)
-
-            st.write("")
             is_last = (idx + 1 == total_q)
             btn_label = "🏁 Завершить сессию" if is_last else "➡️ Следующий вопрос"
             
-            if st.button(btn_label, key="sandbox_next_voice_btn", type="primary", use_container_width=True):
+            if st.button(btn_label, key="sandbox_voice_next_btn", type="primary", use_container_width=True):
                 if not is_last:
-                    st.session_state.sandbox_current_index += 1
-                    st.session_state.sandbox_show_expected = False
+                    try:
+                        audio_bytes = user_audio.read()
+                        temp_dir = Path("data/audio")
+                        temp_dir.mkdir(parents=True, exist_ok=True)
+                        temp_audio_path = temp_dir / f"session_{st.session_state.sandbox_session_id}_q_{q['id']}_temp.wav"
+                        with open(temp_audio_path, "wb") as f:
+                            f.write(audio_bytes)
+                        
+                        st.session_state.sandbox_answers[idx] = {
+                            "id": q["id"],
+                            "question_text": q["question_text"],
+                            "expected_answer": q["expected_answer"],
+                            "question_type": q["question_type"],
+                            "transcribed_text": "(Распознавание речи...)",
+                            "is_voice": True,
+                            "ai_evaluated": False,
+                            "transcribing": True,
+                            "temp_audio_path": temp_audio_path
+                        }
+                        
+                        import threading
+                        def run_bg_transcription(sess_id, q_id, q_idx, file_path):
+                            try:
+                                transcribed = manager.audio_manager.process_user_audio(file_path)
+                                if not transcribed:
+                                    transcribed = "(Тишина или неразборчивая речь)"
+                                
+                                if "sandbox_answers" in st.session_state and q_idx in st.session_state.sandbox_answers:
+                                    st.session_state.sandbox_answers[q_idx]["transcribed_text"] = transcribed
+                                    st.session_state.sandbox_answers[q_idx]["transcribing"] = False
+                                    
+                                with get_db_session() as session:
+                                    from sqlalchemy import select
+                                    from src.database.models import AnswerHistory
+                                    stmt = select(AnswerHistory).where(
+                                        AnswerHistory.session_id == sess_id,
+                                        AnswerHistory.question_id == q_id
+                                    )
+                                    db_history = session.scalar(stmt)
+                                    if db_history:
+                                        db_history.transcribed_text = transcribed
+                                    else:
+                                        create_answer_history(
+                                            db=session,
+                                            session_id=sess_id,
+                                            question_id=q_id,
+                                            confidence_score=0,
+                                            transcribed_text=transcribed,
+                                            evaluation_status="Pending"
+                                        )
+                            except Exception as th_err:
+                                print(f"Error in bg transcription: {th_err}")
+                                if "sandbox_answers" in st.session_state and q_idx in st.session_state.sandbox_answers:
+                                    st.session_state.sandbox_answers[q_idx]["transcribing"] = False
+                        
+                        threading.Thread(
+                            target=run_bg_transcription,
+                            args=(st.session_state.sandbox_session_id, q["id"], idx, temp_audio_path)
+                        ).start()
+                        
+                        st.session_state.sandbox_current_index += 1
+                        st.session_state.sandbox_show_expected = False
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Ошибка при фоновом запуске распознавания: {e}")
                 else:
-                    with get_db_session() as session:
-                        finish_training_session(session, st.session_state.sandbox_session_id)
-                    st.session_state.sandbox_session_active = False
-                    st.session_state.sandbox_finished = True
-                st.rerun()
+                    trigger_final_evaluation(user_audio)
 
         # Render Expected Answer & Self-Rating if show_expected is True and user hasn't submitted a voice answer
         elif st.session_state.sandbox_show_expected:
@@ -395,11 +543,7 @@ def render_training():
                     st.session_state.sandbox_current_index += 1
                     st.session_state.sandbox_show_expected = False
                 else:
-                    with get_db_session() as session:
-                        finish_training_session(session, st.session_state.sandbox_session_id)
-                    st.session_state.sandbox_session_active = False
-                    st.session_state.sandbox_finished = True
-                
+                    trigger_final_evaluation(None)
                 st.rerun()
 
     # 3. State: Session Finished / Summary Page
@@ -427,24 +571,66 @@ def render_training():
             st.write("")
             st.markdown("### 📋 Детализация оценок")
             
-            # Show a premium summary table
+            # Show a premium summary collapsible detailed layout
             for r in ratings_list:
-                ai_badge = ""
-                if r.get("ai_evaluated"):
-                    ai_badge = "<span style='background: rgba(129, 140, 248, 0.15); color: #818cf8; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem; border: 1px solid rgba(129, 140, 248, 0.3); margin-left: 10px;'>Оценка ИИ</span>"
+                ai_badge = "🤖 Оценка ИИ" if r.get("ai_evaluated") else "📝 Самооценка"
+                badge_color = "#818cf8" if r.get("ai_evaluated") else "#94a3b8"
                 
-                st.markdown(f"""
-                <div style="background: rgba(255, 255, 255, 0.01); border: 1px solid rgba(255, 255, 255, 0.05); padding: 15px; border-radius: 8px; margin-bottom: 12px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <strong style="color: #818cf8;">Вопрос #{r['id']} ({r['question_type']}){ai_badge}</strong>
-                        <span style="background: rgba(16, 185, 129, 0.15); color: #34d399; padding: 3px 10px; border-radius: 12px; font-weight: bold; font-size: 0.85rem; border: 1px solid rgba(16, 185, 129, 0.3);">
-                            Оценка: {r['rating']} / 10
-                        </span>
-                    </div>
-                    <div style="color: #94a3b8; font-size: 0.9rem;">{r['question_text']}</div>
-                    {"<div style='color: #cbd5e1; font-size: 0.85rem; margin-top: 10px; background: rgba(255, 255, 255, 0.02); padding: 8px; border-radius: 4px; border-left: 3px solid #818cf8;'><b>Резюме ИИ:</b> " + r['verdict'] + "</div>" if r.get('ai_evaluated') else ""}
-                </div>
-                """, unsafe_allow_html=True)
+                with st.expander(f"📌 Вопрос #{r['id']} ({r['question_type']}) — Оценка: {r['rating']} / 10 ({ai_badge})"):
+                    st.markdown(f"<div style='font-size: 1.05rem; font-weight: 500; color: #f0f2f6; margin-bottom: 15px;'>{r['question_text']}</div>", unsafe_allow_html=True)
+                    
+                    if r.get("ai_evaluated") and r.get("ai_result"):
+                        result = r["ai_result"]
+                        
+                        st.markdown(f"**🗣️ Ваш распознанный ответ (STT):**")
+                        st.info(result.get('transcribed_text', r.get('transcribed_text', '')))
+                        
+                        # Criteria Scores Columns
+                        st.markdown("##### 📊 Оценки по критериям:")
+                        crit_cols = st.columns(len(result['criteria']))
+                        for c_idx, crit in enumerate(result['criteria']):
+                            with crit_cols[c_idx]:
+                                st.markdown(f"""
+                                <div style="text-align: center; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 8px;">
+                                    <small style="color: #94a3b8; font-weight: 600; font-size: 0.75rem;">{crit['criterion']}</small>
+                                    <h3 style="color: #818cf8; margin: 5px 0; font-size: 1.3rem;">{crit['score']} / 10</h3>
+                                    <p style="color: #cbd5e1; font-size: 0.75rem; margin: 0; line-height: 1.2;">{crit['explanation']}</p>
+                                </div>
+                                """, unsafe_allow_html=True)
+                        
+                        st.write("")
+                        # Strengths vs Weaknesses side-by-side
+                        col_good, col_bad = st.columns(2)
+                        with col_good:
+                            st.markdown(f"""
+                            <div style="background: rgba(16, 185, 129, 0.05); border-left: 4px solid #10b981; padding: 15px; border-radius: 4px; height: 100%;">
+                                <strong style="color: #34d399; font-size: 0.9rem;">🟢 Что было хорошо:</strong>
+                                <p style="color: #cbd5e1; font-size: 0.85rem; margin-top: 8px; line-height: 1.4;">{result['what_was_good']}</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        with col_bad:
+                            st.markdown(f"""
+                            <div style="background: rgba(239, 68, 68, 0.05); border-left: 4px solid #ef4444; padding: 15px; border-radius: 4px; height: 100%;">
+                                <strong style="color: #f87171; font-size: 0.9rem;">🔴 Чего не хватило / Ошибки:</strong>
+                                <p style="color: #cbd5e1; font-size: 0.85rem; margin-top: 8px; line-height: 1.4;">{result['what_was_bad_or_missing']}</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        
+                        st.write("")
+                        # Verdict & Recommendations
+                        st.markdown(f"""
+                        <div style="background: rgba(99, 102, 241, 0.05); border-left: 4px solid #6366f1; padding: 15px; border-radius: 4px;">
+                            <strong style="color: #818cf8; font-size: 0.9rem;">💡 Резюме и Вердикт ИИ:</strong>
+                            <p style="color: #cbd5e1; font-size: 0.85rem; margin-top: 8px; line-height: 1.4;">{result['verdict']}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.markdown(f"""
+                        <div style="background: rgba(255, 255, 255, 0.02); border-left: 4px solid #94a3b8; padding: 15px; border-radius: 4px;">
+                            <strong style="color: #94a3b8; font-size: 0.9rem;">📝 Самооценка:</strong>
+                            <p style="color: #cbd5e1; font-size: 0.85rem; margin-top: 8px;">Вы оценили свой ответ на {r['rating']} из 10.</p>
+                        </div>
+                        """, unsafe_allow_html=True)
         else:
             st.info("Вы пометили все вопросы в этой сессии как дефектные/пропущенные.")
 
@@ -453,4 +639,5 @@ def render_training():
             st.session_state.sandbox_session_active = False
             st.session_state.sandbox_finished = False
             st.session_state.sandbox_questions = []
+            st.session_state.sandbox_answers = {}
             st.rerun()
