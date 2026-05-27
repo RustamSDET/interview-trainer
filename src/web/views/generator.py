@@ -118,7 +118,7 @@ def render_generator(hierarchy: list):
                         success_count = generate_questions_batch(
                             db=session,
                             targets=batch_targets,
-                            overwrite=True
+                            overwrite=False
                         )
                         
                         status_text.markdown("🎉 **Процесс генерации вопросов завершен!**")
