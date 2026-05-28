@@ -1,3 +1,8 @@
+import os
+# Force gRPC to use the stable OS-native DNS resolver instead of the custom ares resolver.
+# This completely prevents intermittent "503 DNS server returned answer with no data" lookup errors on macOS/Docker.
+os.environ["GRPC_DNS_RESOLVER"] = "native"
+
 from langchain_google_vertexai import ChatVertexAI
 
 _llm_instance = None

@@ -72,12 +72,6 @@ def analyze_answers_batch(items: List[Dict[str, str]]) -> BatchAnswerEvaluation:
     )
 
     llm = get_vertex_llm()
-    
-    # Быстрый прогрев сессии
-    try:
-        llm.invoke("warmup")
-    except Exception as warmup_err:
-        print(f"DEBUG: Warmup warning: {warmup_err}")
 
     raw_schema = BatchAnswerEvaluation.model_json_schema()
     flat_json_schema = make_schema_flat(raw_schema)
@@ -133,15 +127,6 @@ def analyze_answers_individually_batch(items: List[Dict[str, str]]) -> List[Sing
     ])
     
     llm = get_vertex_llm()
-    
-    # Принудительный прогрев для авторизации на главном потоке.
-    # Это предотвращает гонку за получением OAuth-токена в параллельных потоках,
-    # которая часто приводит к ошибкам DNS-резолвинга oauth2.googleapis.com.
-    try:
-        print("DEBUG: [Warmup] Synchronous warmup on main thread to securely cache OAuth credentials...")
-        llm.invoke("warmup")
-    except Exception as warmup_err:
-        print(f"DEBUG: [Warmup Warning] Warmup failed (ignored): {warmup_err}")
 
     raw_schema = SingleAnswerEvaluation.model_json_schema()
     flat_json_schema = make_schema_flat(raw_schema)

@@ -73,13 +73,6 @@ def generate_questions_node(state: GeneratorState) -> dict:
     # Инициализируем LLM
     llm = get_vertex_llm()
     
-    # Выполняем быстрый прогрев сессии для надежной работы структурированного вывода в окружении GCP
-    try:
-        print("DEBUG: Выполнение быстрого прогревочного запроса...")
-        llm.invoke("warmup")
-    except Exception as warmup_err:
-        print(f"DEBUG: Предупреждение во время прогрева (игнорируется): {warmup_err}")
-    
     # 1. Извлекаем сырую JSON-схему из Pydantic-модели
     raw_schema = GeneratedQuestions.model_json_schema()
     
